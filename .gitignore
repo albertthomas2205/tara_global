@@ -1,0 +1,31 @@
+*.pyc
+__pycache__/
+# Ignore robot files and images
+profile_pics/robot_files/*
+profile_pics/robo_image/*
+profile_pics/*
+profile_pics/robots/robots_data.json
+
+# Ignore Python cache files
+*.pyc
+__pycache__/
+
+# Ignore Django migrations
+*/migrations/*
+!*/migrations/__init__.py
+
+# Ignore environment variables
+.env
+
+# Ignore virtual environment (if any)
+env/
+venv/
+.myenv/
+
+# Ignore Django migrations except for __init__.py
+accounts/migrations/
+enquiry/migrations/
+robot/migrations/
+!accounts/migrations/__init__.py
+!enquiry/migrations/__init__.py
+!robot/migrations/__init__.py
