@@ -26,6 +26,7 @@ import time
 from datetime import datetime
 
 from rest_framework.permissions import IsAuthenticated
+from django.db import transaction
 
 #language add 
 @api_view(['POST'])
@@ -91,83 +92,43 @@ def delete_language(request, pk):
 @permission_classes([IsAuthenticated])
 def create_robot(request):
     """
-    Create a new robot and return the robot details along with the created timestamp.
-    Also generate a JSON file with the robot's data and append new robot data to the existing file.
+    Production-safe robot creation API.
+    - Saves robot in database
+    - Returns created robot data
+    - No filesystem usage (Render safe)
     """
+
     serializer = RobotSerializer(data=request.data, context={'request': request})
-    if serializer.is_valid():
-        robot = serializer.save()
-        serialized_data = RobotSerializer(robot, context={'request': request}).data
-        robo_id = serialized_data['robo_id']  
-        robot_data = {
-            robo_id: {
-                'id':serialized_data['id'],
-                'robo_id': serialized_data['robo_id'],
-                'robo_name': serialized_data['robo_name'],
-                'active_status': serialized_data['active_status'],
-                'battery_status': serialized_data['battery_status'],
-                'working_time': serialized_data['working_time'],
-                'position': serialized_data['position'],
-                'language': serialized_data['language'],
-                'subscription':serialized_data['subscription'],
-                'current':serialized_data['current'],
-                'energy':serialized_data['energy'],
-                'power':serialized_data['power'],
-                'voltage':serialized_data['voltage'],
-                'quality':serialized_data['quality'],
-                'map':serialized_data['map'],
-                'emergency_stop':serialized_data['emergency_stop'],
-                'motor_brake_released':serialized_data['motor_brake_released'],
-                'ready_to_navigate':serialized_data['ready_to_navigate'],
-                'volume':serialized_data['volume'],
-                'charging':serialized_data['charging'],
-                'dockingStatus':serialized_data['dockingStatus']
 
-                
+    if not serializer.is_valid():
+        return Response(
+            {"status": "error", "errors": serializer.errors},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
-               
-            }
-        }
-        filename = "robots_data.json"
-        file_path = os.path.join(settings.MEDIA_ROOT, 'robots', filename)
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
-
-        try:
-            if os.path.exists(file_path):
-                with open(file_path, 'r') as json_file:
-                    try:
-                        existing_data = json.load(json_file)
-                    except json.JSONDecodeError:
-                        existing_data = {}
-            else:
-                existing_data = {}
-
-            existing_data.update(robot_data)
-
-            with open(file_path, 'w') as json_file:
-                json.dump(existing_data, json_file, indent=4)
-
-        except IOError as e:
-            return Response(
-                {"status": "error", "message": f"Failed to save JSON file: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+    try:
+        with transaction.atomic():
+            robot = serializer.save()
+            serialized_data = RobotSerializer(robot, context={'request': request}).data
 
         return Response(
             {
                 "status": "ok",
-                "message": "Robot created successfully, and data saved to the JSON file.",
+                "message": "Robot created successfully",
                 "data": serialized_data,
-                "json_file": filename  
             },
             status=status.HTTP_201_CREATED,
         )
-    
-    return Response(
-        {"status": "error", "errors": serializer.errors},
-        status=status.HTTP_400_BAD_REQUEST,
-    )
 
+    except Exception as e:
+        return Response(
+            {
+                "status": "error",
+                "message": "Failed to create robot",
+                "details": str(e),
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
 
 
