@@ -34,6 +34,7 @@ ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
     '192.168.1.41',
+    'tara-global.onrender.com',
     '3.88.46.127,3.88.46.127',  # Explicitly allow the duplicated version
 ]
 
