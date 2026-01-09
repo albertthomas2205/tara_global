@@ -35,7 +35,9 @@ from django.core.cache import cache
 from robot.models import *
 from django.contrib.auth.hashers import check_password
 from rest_framework.permissions import IsAuthenticated
-
+from decouple import config
+from rest_framework.permissions import AllowAny
+from Tara.settings import SUPERUSER_CREATE_KEY
 #admin register 
 @api_view(['POST'])
 def register_user(request):
@@ -62,6 +64,78 @@ def register_user(request):
         status=status.HTTP_400_BAD_REQUEST,
     )
 
+
+User = get_user_model()
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def create_superuser_api(request):
+    """
+    Create superuser using secret key
+    """
+
+    secret_key = request.headers.get("X-SUPERUSER-KEY")
+
+    if secret_key != SUPERUSER_CREATE_KEY:
+        return Response(
+            {
+                "status": "error",
+                "message": "Invalid or missing superuser key"
+            },
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    username = request.data.get("username")
+    email = request.data.get("email")
+    password = request.data.get("password")
+
+    if not username or not email or not password:
+        return Response(
+            {
+                "status": "error",
+                "message": "Username, email and password are required"
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if User.objects.filter(username=username).exists():
+        return Response(
+            {
+                "status": "error",
+                "message": "Username already exists"
+            },
+            status=status.HTTP_409_CONFLICT,
+        )
+
+    if User.objects.filter(email=email).exists():
+        return Response(
+            {
+                "status": "error",
+                "message": "Email already exists"
+            },
+            status=status.HTTP_409_CONFLICT,
+        )
+
+    user = User.objects.create_superuser(
+        username=username,
+        email=email,
+        password=password
+    )
+
+    return Response(
+        {
+            "status": "ok",
+            "message": "Superuser created successfully",
+            "data": {
+                "username": user.username,
+                "email": user.email,
+                "is_superuser": user.is_superuser,
+                "is_staff": user.is_staff,
+            },
+        },
+        status=status.HTTP_201_CREATED,
+    )
 # not approved admins list
 @login_required
 def unapproved_users_list(request):

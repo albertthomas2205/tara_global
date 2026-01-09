@@ -3,6 +3,7 @@ from accounts.views import *
 
 urlpatterns = [
     path('register/', register_user, name='register_user'),
+    path("create-superuser/", create_superuser_api,name='create_superuser'),
     path('edit/admin/<int:user_id>/', edit_admin_user, name='edit_admin_user'),
     path('admin/detail/<int:user_id>/', admin_user_detail, name='admin_user_detail'),
     path('login/', login_user, name='login_user'),
