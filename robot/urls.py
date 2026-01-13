@@ -15,10 +15,11 @@ urlpatterns = [
     path('languages/delete/<int:pk>/', delete_language, name='delete_language'),
 
     path('get-robots/', get_robots_file, name='get_robots_file'),
-    path('update-robots/', update_robots_file, name='update_robots_file'),
+    path('update-robots/', update_robots, name='update_robots'),
 
     path('sale/robot/', create_purchase_robot, name='sale_robot'),
     path('sale/robots/list/', list_purchase_robots, name='list_purchase_robots'),
+    path('sale/robots/not_purchased_list/',list_not_purchased_robots, name='list_not_purchased_robots'),
     path('edit/sale/robot/<int:pk>/', update_purchase_robot, name='edit_purchase_robot'),
     path('sale/robot/delete/<int:pk>/', delete_purchase_robot, name='delete_purchase_robot'),
     path('sale/user/list/<int:user_id>/', list_purchase_robot_by_user, name='list_purchase_robot_by_user'),

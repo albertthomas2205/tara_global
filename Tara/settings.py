@@ -29,14 +29,25 @@ SECRET_KEY = 'django-insecure-jfbr7%m1$c%ucsh6mdy0rg!y4al4*qg^!1%0819n97mbx7&3%_
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = [
-    '3.88.46.127',
-    'localhost',
-    '127.0.0.1',
-    '192.168.1.41',
-    'tara-global.onrender.com',
-    '3.88.46.127,3.88.46.127',  # Explicitly allow the duplicated version
+# ALLOWED_HOSTS = [
+#     '3.88.46.127',
+#     'localhost',
+#     '127.0.0.1',
+#     '192.168.1.41',
+#     'tara-global.onrender.com',
+#      'unruminating-wally-placid.ngrok-free.dev',
+#     '3.88.46.127,3.88.46.127',  # Explicitly allow the duplicated version
+# ]
+
+ALLOWED_HOSTS = ['*']
+
+CSRF_TRUSTED_ORIGINS = [
+    'https://*.ngrok-free.dev',
 ]
+
+
+CORS_ALLOW_ALL_ORIGINS = True
+
 
 # Add this middleware setting
 USE_X_FORWARDED_HOST = True
@@ -63,7 +74,10 @@ INSTALLED_APPS = [
     'police',
     'education',
     'appointment',
-    'navigation'
+    'navigation',
+    'channels',
+    'websocket_service',
+    
 
 ]
 
@@ -101,7 +115,18 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'Tara.wsgi.application'
+# WSGI_APPLICATION = 'Tara.wsgi.application'
+
+ASGI_APPLICATION = 'Tara.asgi.application'
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [("127.0.0.1", 6379)],
+        },
+    },
+}
 
 
 # Database

@@ -24,9 +24,11 @@ from django.http import JsonResponse
 import json
 import time
 from datetime import datetime
-
+from django.db import DatabaseError
 from rest_framework.permissions import IsAuthenticated
 from django.db import transaction
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 
 #language add 
 @api_view(['POST'])
@@ -135,74 +137,121 @@ def create_robot(request):
 #list robots
 filename = "robots_data.json"
 file_path = os.path.join(settings.MEDIA_ROOT, 'robots', filename)
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def list_robots(request):
-    """
-    List all robots from the saved JSON file and update the model if necessary.
-    """
-    filename = "robots_data.json"
-    file_path = os.path.join(settings.MEDIA_ROOT, 'robots', filename)
-    if os.path.exists(file_path):
-        try:
-          with open(file_path, 'r') as json_file:
-                robots_data = json.load(json_file)
+
+# @api_view(['GET'])
+# @permission_classes([IsAuthenticated])
+# def list_robots(request):
+#     """
+#     List all robots from the saved JSON file and update the model if necessary.
+#     """
+#     filename = "robots_data.json"
+#     file_path = os.path.join(settings.MEDIA_ROOT, 'robots', filename)
+#     if os.path.exists(file_path):
+#         try:
+#           with open(file_path, 'r') as json_file:
+#                 robots_data = json.load(json_file)
                 
-                if not isinstance(robots_data, dict):
-                    return Response(
-                        {"status": "error", "message": "Invalid data format in robots_data.json."},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
+#                 if not isinstance(robots_data, dict):
+#                     return Response(
+#                         {"status": "error", "message": "Invalid data format in robots_data.json."},
+#                         status=status.HTTP_400_BAD_REQUEST,
+#                     )
                 
-                for robo_id, robot_data in robots_data.items():
+#                 for robo_id, robot_data in robots_data.items():
                     
-                    if isinstance(robot_data, dict) and 'robo_id' in robot_data:
-                        try:
-                            robot = Robot.objects.get(robo_id=robot_data['robo_id'])
-                            update_needed = False
+#                     if isinstance(robot_data, dict) and 'robo_id' in robot_data:
+#                         try:
+#                             robot = Robot.objects.get(robo_id=robot_data['robo_id'])
+#                             update_needed = False
                             
-                            for field, value in robot_data.items():
-                                if hasattr(robot, field):
-                                    if field == 'language':  
-                                        try:
+#                             for field, value in robot_data.items():
+#                                 if hasattr(robot, field):
+#                                     if field == 'language':  
+#                                         try:
                                             
-                                            language_instance = Language.objects.get(language=value)
-                                            setattr(robot, field, language_instance)
-                                        except Language.DoesNotExist:
-                                            return Response(
-                                                {"status": "error", "message": f"Language '{value}' not found."},
-                                                status=status.HTTP_400_BAD_REQUEST,
-                                            )
-                                    else:
+#                                             language_instance = Language.objects.get(language=value)
+#                                             setattr(robot, field, language_instance)
+#                                         except Language.DoesNotExist:
+#                                             return Response(
+#                                                 {"status": "error", "message": f"Language '{value}' not found."},
+#                                                 status=status.HTTP_400_BAD_REQUEST,
+#                                             )
+#                                     else:
                                         
-                                        if getattr(robot, field) != value:
-                                            setattr(robot, field, value)
-                                            update_needed = True
+#                                         if getattr(robot, field) != value:
+#                                             setattr(robot, field, value)
+#                                             update_needed = True
                             
-                            if update_needed:
-                                robot.save()
-                        except Robot.DoesNotExist:
-                            continue  
+#                             if update_needed:
+#                                 robot.save()
+#                         except Robot.DoesNotExist:
+#                             continue  
 
-                return Response(
-                    {
-                        "status": "ok",
-                        "message": "Robots data retrieved and model updated if necessary.",
-                        "data": robots_data
-                    },
-                    status=status.HTTP_200_OK,
-                )
+#                 return Response(
+#                     {
+#                         "status": "ok",
+#                         "message": "Robots data retrieved and model updated if necessary.",
+#                         "data": robots_data
+#                     },
+#                     status=status.HTTP_200_OK,
+#                 )
         
-        except json.JSONDecodeError:
-            return Response(
-                {"status": "error", "message": "Failed to decode JSON data."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-    return Response(
-        {"status": "error", "message": "No robots data found."},
-        status=status.HTTP_404_NOT_FOUND,
-    )
+#         except json.JSONDecodeError:
+#             return Response(
+#                 {"status": "error", "message": "Failed to decode JSON data."},
+#                 status=status.HTTP_400_BAD_REQUEST,
+#             )
+#     return Response(
+#         {"status": "error", "message": "No robots data found."},
+#         status=status.HTTP_404_NOT_FOUND,
+#     )
 
+@api_view(['GET'])
+# @permission_classes([IsAuthenticated])
+def list_robots(request):
+    try:
+        robots = Robot.objects.all()
+
+        if not robots.exists():
+            return Response(
+                {
+                    "status": "ok",
+                    "message": "No robots found.",
+                    "data": []
+                },
+                status=status.HTTP_200_OK
+            )
+
+        serializer = RobotSerializer(robots, many=True)
+
+        return Response(
+            {
+                "status": "ok",
+                "message": "Robots retrieved successfully.",
+                "data": serializer.data
+            },
+            status=status.HTTP_200_OK
+        )
+
+    except DatabaseError as db_error:
+        return Response(
+            {
+                "status": "error",
+                "message": "Database error occurred while fetching robots.",
+                "details": str(db_error)
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+    except Exception as error:
+        return Response(
+            {
+                "status": "error",
+                "message": "An unexpected error occurred.",
+                "details": str(error)
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 #passing json files api
 @api_view(['GET'])
@@ -221,181 +270,188 @@ def get_robots_file(request):
 
 #manually updation api
 @api_view(['POST'])
-def update_robots_file(request):
+def update_robots(request):
     """
-    Update the robots_data.json file and the corresponding Robot database entry.
+    Manually update robots directly in the database.
+
+    Expected payload:
+    {
+        "ROBO_001": {
+            "battery_status": 85,
+            "charging": true,
+            "language": "English"
+        },
+        "ROBO_002": {
+            "active_status": false
+        }
+    }
     """
+
+    robots_data = request.data
+
+    if not isinstance(robots_data, dict) or not robots_data:
+        return Response(
+            {
+                "status": "error",
+                "message": "Invalid or empty payload."
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    updated_robots = {}
+
     try:
-        filename = "robots_data.json"
-        file_path = os.path.join(settings.MEDIA_ROOT, 'robots', filename)
-        robots_data = request.data  # Expecting JSON format: { "robo_id": { "field": "value", ... } }
+        with transaction.atomic():
+            for robo_id, fields in robots_data.items():
 
-        if not robots_data:
-            return Response({"status": "error", "message": "No data provided."}, status=status.HTTP_400_BAD_REQUEST)
+                if not isinstance(fields, dict):
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": f"Invalid data format for robot '{robo_id}'."
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
 
-        # Load existing JSON data
-        if os.path.exists(file_path):
-            with open(file_path, 'r') as json_file:
                 try:
-                    existing_data = json.load(json_file)
-                except json.JSONDecodeError:
-                    existing_data = {}
-        else:
-            existing_data = {}
+                    robot = Robot.objects.select_for_update().get(robo_id=robo_id)
+                except Robot.DoesNotExist:
+                    return Response(
+                        {
+                            "status": "error",
+                            "message": f"Robot '{robo_id}' not found."
+                        },
+                        status=status.HTTP_404_NOT_FOUND
+                    )
 
-        if not isinstance(existing_data, dict):
-            existing_data = {}
+                for field, value in fields.items():
+                    if not hasattr(robot, field):
+                        continue
 
-        updated_data = {}
+                    if field == 'language':
+                        language = Language.objects.filter(language=value).first()
+                        if not language:
+                            return Response(
+                                {
+                                    "status": "error",
+                                    "message": f"Language '{value}' not found."
+                                },
+                                status=status.HTTP_400_BAD_REQUEST
+                            )
+                        robot.language = language
+                    else:
+                        setattr(robot, field, value)
 
-        for robo_id, updated_fields in robots_data.items():
-            if robo_id not in existing_data:
-                return Response(
-                    {"status": "error", "message": f"Robot ID {robo_id} does not exist in JSON file."},
-                    status=status.HTTP_404_NOT_FOUND
-                )
-
-            # Update JSON file
-            existing_data[robo_id].update(updated_fields)
-            updated_data[robo_id] = existing_data[robo_id]
-
-            # Update Database (if fields match Robot model)
-            try:
-                robot = Robot.objects.get(robo_id=robo_id)
-                for field, value in updated_fields.items():
-                    if hasattr(robot, field):
-                        # Check if the field is language and fetch the corresponding Language object
-                        if field == 'language':
-                            language_instance = Language.objects.filter(language=value).first()
-                            if language_instance:
-                                setattr(robot, field, language_instance)
-                            else:
-                                return Response(
-                                    {"status": "error", "message": f"Language '{value}' not found."},
-                                    status=status.HTTP_404_NOT_FOUND
-                                )
-                        else:
-                            setattr(robot, field, value)
                 robot.save()
-            except Robot.DoesNotExist:
-                return Response(
-                    {"status": "error", "message": f"Robot ID {robo_id} not found in database."},
-                    status=status.HTTP_404_NOT_FOUND
-                )
 
-        # Ensure directory exists
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
-
-        # Save updated JSON data
-        with open(file_path, 'w') as json_file:
-            json.dump(existing_data, json_file, indent=4)
-
-        return Response(
-            {"status": "ok", "message": "Robot data updated successfully in JSON file and database.", "data": updated_data},
-            status=status.HTTP_200_OK
-        )
-
-    except Exception as e:
-        return Response(
-            {"status": "error", "message": str(e)},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-#robot details update 
-
-@api_view(['PUT'])
-def update_robot_by_id(request, robo_id):
-    """
-    Update an existing robot using robo_id and update the robots_data.json file.
-    """
-    try:
-        robot = Robot.objects.get(robo_id=robo_id)
-    except Robot.DoesNotExist:
-        return Response(
-            {"status": "error", "message": f"Robot with robo_id {robo_id} not found."},
-            status=status.HTTP_404_NOT_FOUND,
-        )
-
-    request_data = request.data.copy()
-
-    # Convert and validate language field
-    if 'language' in request_data:
-        try:
-            language_id = int(request_data['language'])  # Convert to integer
-            language_instance = get_object_or_404(Language, id=language_id)
-            request_data['id'] = language_instance  # Assign the Language instance, not just the ID
-        except (ValueError, Language.DoesNotExist):
-            return Response(
-                {"status": "error", "message": "Invalid language ID."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-
-    # Serialize and update the robot instance
-    serializer = RobotSerializer(robot, data=request_data, partial=True, context={'request': request})
-
-    if serializer.is_valid():
-        robot = serializer.save()
-        serialized_data = RobotSerializer(robot, context={'request': request}).data
-        robo_id = serialized_data['robo_id']
-
-        # Load existing data from robots_data.json
-        filename = "robots_data.json"
-        file_path = os.path.join(settings.MEDIA_ROOT, 'robots', filename)
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
-
-        try:
-            if os.path.exists(file_path):
-                with open(file_path, 'r') as json_file:
-                    try:
-                        existing_data = json.load(json_file)
-                    except json.JSONDecodeError:
-                        existing_data = {}
-            else:
-                existing_data = {}
-
-            # Update the robot data in the JSON file
-            if robo_id in existing_data:
-                existing_data[robo_id].update({
-                    'robo_name': serialized_data['robo_name'],
-                    'active_status': serialized_data['active_status'],
-                    'battery_status': serialized_data['battery_status'],
-                    'working_time': serialized_data['working_time'],
-                    'position': serialized_data['position'],
-                    'language': serialized_data['language'],
-                    'subscription': serialized_data['subscription'],
-                    'quality':serialized_data['quality'],
-                    'map':serialized_data['map'],
-                    'emergency_stop':serialized_data['emergency_stop'],
-                    'motor_brake_released':serialized_data['motor_brake_released'],
-                    'ready_to_navigate':serialized_data['ready_to_navigate'],
-                   
-                    'charging':serialized_data['charging'],
-                    'dockingStatus':serialized_data['dockingStatus']
-                })
-
-            with open(file_path, 'w') as json_file:
-                json.dump(existing_data, json_file, indent=4)
-
-        except IOError as e:
-            return Response(
-                {"status": "error", "message": f"Failed to update JSON file: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+                updated_robots[robo_id] = {
+                    "updated_fields": list(fields.keys())
+                }
 
         return Response(
             {
                 "status": "ok",
-                "message": "Robot updated successfully, and data saved to the JSON file.",
-                "data": serialized_data,
-                "json_file": filename
+                "message": "Robots updated successfully.",
+                "data": updated_robots
             },
-            status=status.HTTP_200_OK,
+            status=status.HTTP_200_OK
         )
 
-    return Response(
-        {"status": "error", "errors": serializer.errors},
-        status=status.HTTP_400_BAD_REQUEST,
-    )
+    except DatabaseError:
+        return Response(
+            {
+                "status": "error",
+                "message": "Database error occurred during update."
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+    except Exception as e:
+        return Response(
+            {
+                "status": "error",
+                "message": "Unexpected server error.",
+                "details": str(e)
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+#robot details update 
+
+@api_view(['PUT', 'PATCH'])
+# @permission_classes([IsAuthenticated])
+def update_robot_by_id(request, robo_id):
+    try:
+        robot = Robot.objects.get(robo_id=robo_id)
+    except Robot.DoesNotExist:
+        return Response(
+            {
+                "status": "error",
+                "message": f"Robot with robo_id '{robo_id}' not found."
+            },
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    try:
+        serializer = RobotSerializer(
+            robot,
+            data=request.data,
+            partial=True,  # allows PATCH-like updates
+            context={'request': request}
+        )
+
+        if not serializer.is_valid():
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Validation failed.",
+                    "errors": serializer.errors
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        updated_robot=serializer.save()
+        
+        # 🔥 WebSocket broadcast
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"robot_{updated_robot.robo_id}",
+            {
+                "type": "robot_message",
+                "message": {
+                    "event": "robot_updated",
+                    "robo_id": updated_robot.robo_id,
+                    "data": serializer.data
+                }
+            }
+        )
+
+
+        return Response(
+            {
+                "status": "ok",
+                "message": "Robot updated successfully.",
+                "data": serializer.data
+            },
+            status=status.HTTP_200_OK
+        )
+
+    except DatabaseError as db_error:
+        return Response(
+            {
+                "status": "error",
+                "message": "Database error occurred while updating robot.",
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+    except Exception as error:
+        return Response(
+            {
+                "status": "error",
+                "message": "Unexpected server error.",
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 #delete robot
 @api_view(['DELETE'])
@@ -512,74 +568,62 @@ def robot_detail(request, robo_id):
 @permission_classes([IsAuthenticated])
 def create_purchase_robot(request):
     """
-    Create a PurchaseRobot instance, update the robot subscription to True,
-    and update the robots_data.json file with the correct format.
+    Create a PurchaseRobot and mark the robot as purchased.
     """
+
     serializer = PurchaseRobotSerializer(data=request.data)
-    if serializer.is_valid():
-        purchase_robot = serializer.save()
-        robot = purchase_robot.robot
-        if not robot.subscription:
-            robot.subscription = True
-            robot.save()
-        serialized_data = PurchaseRobotSerializer(purchase_robot).data
-        robo_id = serialized_data['robot']['robo_id']
-        robot_data = {
-            robo_id: {
-                'id':serialized_data['robot']['id'],
-                'robo_id': serialized_data['robot']['robo_id'],
-                'robo_name': serialized_data['robot']['robo_name'],
-                'active_status': serialized_data['robot']['active_status'],
-                'subscription': robot.subscription,  
-                'battery_status': serialized_data['robot']['battery_status'],
-                'working_time': serialized_data['robot']['working_time'],
-                'position': serialized_data['robot']['position'],
-                'language': serialized_data['robot']['language'],
-                'last_updated': datetime.now().isoformat()  
-            }
-        }
 
-        filename = "robots_data.json"
-        file_path = os.path.join(settings.MEDIA_ROOT, 'robots', filename)
+    if not serializer.is_valid():
+        return Response(
+            {
+                "status": "error",
+                "message": "Validation failed.",
+                "errors": serializer.errors
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    try:
+        with transaction.atomic():
+            purchase_robot = serializer.save()
+            robot = purchase_robot.robot
 
-        try:
-            if os.path.exists(file_path):
-                with open(file_path, 'r') as json_file:
-                    try:
-                        existing_data = json.load(json_file)
-                    except json.JSONDecodeError:
-                        existing_data = {}
-            else:
-                existing_data = {}
-            existing_data.update(robot_data)
-            with open(file_path, 'w') as json_file:
-                json.dump(existing_data, json_file, indent=4)
+            # Business rules
+            if not robot.is_purchased:
+                robot.is_purchased = True
 
-        except IOError as e:
-            return Response(
-                {"status": "error", "message": f"Failed to save JSON file: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+            if not robot.subscription:
+                robot.subscription = True
+
+            robot.save(update_fields=["is_purchased", "subscription"])
 
         return Response(
             {
                 "status": "ok",
-                "message": "PurchaseRobot created successfully, robot subscription updated, and JSON file updated.",
-                "data": serialized_data,
-                "json_file": filename  
+                "message": "Robot purchased successfully.",
+                "data": PurchaseRobotSerializer(purchase_robot).data
             },
-            status=status.HTTP_201_CREATED,
+            status=status.HTTP_201_CREATED
         )
 
-    return Response(
-        {"status": "error", "errors": serializer.errors},
-        status=status.HTTP_400_BAD_REQUEST,
-    )
+    except DatabaseError:
+        return Response(
+            {
+                "status": "error",
+                "message": "Database error occurred while processing purchase."
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
-
-
+    except Exception as e:
+        return Response(
+            {
+                "status": "error",
+                "message": "Unexpected server error.",
+                "details": str(e)
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 #purchase robot list
 @api_view(['GET'])
@@ -595,6 +639,56 @@ def list_purchase_robots(request):
         "data": serializer.data
     }, status=status.HTTP_200_OK)
 
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_not_purchased_robots(request):
+    """
+    List all robots that are not purchased (is_purchased = False).
+    """
+    try:
+        robots = Robot.objects.filter(is_purchased=False)
+
+        if not robots.exists():
+            return Response(
+                {
+                    "status": "ok",
+                    "message": "No non-purchased robots found.",
+                    "data": []
+                },
+                status=status.HTTP_200_OK
+            )
+
+        serializer = RobotSerializer(robots, many=True)
+
+        return Response(
+            {
+                "status": "ok",
+                "message": "Non-purchased robots retrieved successfully.",
+                "data": serializer.data
+            },
+            status=status.HTTP_200_OK
+        )
+
+    except DatabaseError:
+        return Response(
+            {
+                "status": "error",
+                "message": "Database error occurred while fetching robots."
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+    except Exception as e:
+        return Response(
+            {
+                "status": "error",
+                "message": "Unexpected server error.",
+                "details": str(e)
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 #purchase robot update
 @api_view(['PUT'])
@@ -1141,8 +1235,6 @@ def delete_punch(request, punch_id):
         )
 
 
-
-
 #list punching
 @api_view(['GET'])
 def list_punches(request):
@@ -1556,6 +1648,23 @@ def stop_robot(request, robo_id):
 
     stop_record = RobotStop.objects.create(robot=robot, status=True)
     serializer = RobotStopSerializer(stop_record)
+    
+      # 🔥 WebSocket broadcast
+    channel_layer = get_channel_layer()
+    
+    async_to_sync(channel_layer.group_send)(
+        f"robot_{robo_id}",
+        {
+            "type": "robot_message",
+            "message": {
+                "event": "robot_stopped",
+                "robo_id":robo_id,
+                "status": True
+            }
+        }
+    )
+
+    
     return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 @api_view(['POST'])
@@ -1575,6 +1684,26 @@ def start_robot(request, robo_id):
         stop_record = RobotStop.objects.create(robot=robot, status=False)
 
     serializer = RobotStopSerializer(stop_record)
+    
+    
+    # 🔥 WebSocket broadcast
+    channel_layer = get_channel_layer()
+    
+    async_to_sync(channel_layer.group_send)(
+        f"robot_{robo_id}",
+        {
+            "type": "robot_message",
+            "message": {
+                "event": "robot_started",
+                "data": {
+                "robo_id":robo_id,
+                "status": True
+                }
+            }
+        }
+    )
+
+    
     return Response(serializer.data, status=status.HTTP_200_OK)
 
 @api_view(['GET'])
